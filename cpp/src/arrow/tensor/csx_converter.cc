@@ -26,6 +26,7 @@
 #include "arrow/status.h"
 #include "arrow/type.h"
 #include "arrow/util/checked_cast.h"
+#include "arrow/util/logging_internal.h"
 #include "arrow/visit_type_inline.h"
 
 namespace arrow {
@@ -38,10 +39,7 @@ namespace {
 // ----------------------------------------------------------------------
 // SparseTensorConverter for SparseCSRIndex
 
-class SparseCSXMatrixConverter : private SparseTensorConverterMixin {
-  using SparseTensorConverterMixin::AssignIndex;
-  using SparseTensorConverterMixin::IsNonZero;
-
+class SparseCSXMatrixConverter {
  public:
   SparseCSXMatrixConverter(SparseMatrixCompressedAxis axis, const Tensor& tensor,
                            const std::shared_ptr<DataType>& index_value_type,
@@ -58,6 +56,8 @@ class SparseCSXMatrixConverter : private SparseTensorConverterMixin {
     const int64_t ndim = tensor_.ndim();
     if (ndim > 2) {
       return Status::Invalid("Invalid tensor dimension");
+    } else if (ndim <= 1) {
+      return Status::NotImplemented("TODO for ndim <= 1");
     }
 
     const int major_axis = static_cast<int>(axis_);
@@ -70,49 +70,42 @@ class SparseCSXMatrixConverter : private SparseTensorConverterMixin {
 
     ARROW_ASSIGN_OR_RAISE(auto values_buffer,
                           AllocateBuffer(value_elsize * nonzero_count, pool_));
-    auto* values = values_buffer->mutable_data();
+    ARROW_ASSIGN_OR_RAISE(indptr_buffer,
+                          AllocateBuffer(index_elsize * (n_major + 1), pool_));
+    ARROW_ASSIGN_OR_RAISE(indices_buffer,
+                          AllocateBuffer(index_elsize * nonzero_count, pool_));
+    auto get_non_zero_value_and_indices =
+        [&]<typename ValueDataType, typename IndexCType, typename ValueCType>(
+            const ValueDataType&, IndexCType, ValueCType) {
+          auto* indptr = indptr_buffer->mutable_data_as<IndexCType>();
+          auto* values = values_buffer->mutable_data_as<ValueCType>();
+          auto* indices = indices_buffer->mutable_data_as<IndexCType>();
 
-    const auto* tensor_data = tensor_.raw_data();
-
-    if (ndim <= 1) {
-      return Status::NotImplemented("TODO for ndim <= 1");
-    } else {
-      ARROW_ASSIGN_OR_RAISE(indptr_buffer,
-                            AllocateBuffer(index_elsize * (n_major + 1), pool_));
-      auto* indptr = indptr_buffer->mutable_data();
-
-      ARROW_ASSIGN_OR_RAISE(indices_buffer,
-                            AllocateBuffer(index_elsize * nonzero_count, pool_));
-      auto* indices = indices_buffer->mutable_data();
-
-      std::vector<int64_t> coords(2);
-      int64_t k = 0;
-      std::fill_n(indptr, index_elsize, 0);
-      indptr += index_elsize;
-      for (int64_t i = 0; i < n_major; ++i) {
-        for (int64_t j = 0; j < n_minor; ++j) {
-          if (axis_ == SparseMatrixCompressedAxis::ROW) {
-            coords = {i, j};
-          } else {
-            coords = {j, i};
+          std::vector<int64_t> coords(2);
+          int64_t k = 0;
+          indptr[0] = 0;
+          ++indptr;
+          // TODO: Should we have a fast path when there are no nonzero counts?
+          for (int64_t i = 0; i < n_major; ++i) {
+            for (int64_t j = 0; j < n_minor; ++j) {
+              if (axis_ == SparseMatrixCompressedAxis::ROW) {
+                coords = {i, j};
+              } else {
+                coords = {j, i};
+              }
+              auto value = tensor_.Value<ValueDataType>(coords);
+              if (is_not_zero<ValueDataType>(value)) {
+                *values++ = value;
+                *indices++ = static_cast<IndexCType>(j);
+                k++;
+              }
+            }
+            *indptr++ = static_cast<IndexCType>(k);
           }
-          const int64_t offset = tensor_.CalculateValueOffset(coords);
-          if (std::any_of(tensor_data + offset, tensor_data + offset + value_elsize,
-                          IsNonZero)) {
-            std::copy_n(tensor_data + offset, value_elsize, values);
-            values += value_elsize;
-
-            AssignIndex(indices, j, index_elsize);
-            indices += index_elsize;
-
-            k++;
-          }
-        }
-        AssignIndex(indptr, k, index_elsize);
-        indptr += index_elsize;
-      }
-    }
-
+          return Status::OK();
+        };
+    DCHECK_OK(VisitValueAndIndexType(tensor_.type(), index_value_type_,
+                                     get_non_zero_value_and_indices));
     std::vector<int64_t> indptr_shape({n_major + 1});
     std::shared_ptr<Tensor> indptr_tensor =
         std::make_shared<Tensor>(index_value_type_, indptr_buffer, indptr_shape);
@@ -162,8 +155,8 @@ namespace {
 Result<std::shared_ptr<Tensor>> MakeTensorFromSparseCSXMatrix(
     SparseMatrixCompressedAxis axis, MemoryPool* pool,
     const std::shared_ptr<Tensor>& indptr, const std::shared_ptr<Tensor>& indices,
-    const int64_t non_zero_length, const std::shared_ptr<DataType>& value_type,
-    const std::vector<int64_t>& shape, const int64_t tensor_size, const uint8_t* raw_data,
+    const std::shared_ptr<DataType>& value_type, const std::vector<int64_t>& shape,
+    const int64_t tensor_size, const uint8_t* raw_data,
     const std::vector<std::string>& dim_names) {
   const auto* indptr_data = indptr->raw_data();
   const auto* indices_data = indices->raw_data();
@@ -176,7 +169,7 @@ Result<std::shared_ptr<Tensor>> MakeTensorFromSparseCSXMatrix(
   ARROW_ASSIGN_OR_RAISE(auto values_buffer,
                         AllocateBuffer(value_elsize * tensor_size, pool));
   auto values = values_buffer->mutable_data();
-  std::fill_n(values, value_elsize * tensor_size, 0);
+  std::memset(values, 0, value_elsize * tensor_size);
 
   std::vector<int64_t> strides;
   RETURN_NOT_OK(ComputeRowMajorStrides(fw_value_type, shape, &strides));
@@ -221,11 +214,10 @@ Result<std::shared_ptr<Tensor>> MakeTensorFromSparseCSRMatrix(
       internal::checked_cast<const SparseCSRIndex&>(*sparse_tensor->sparse_index());
   const auto& indptr = sparse_index.indptr();
   const auto& indices = sparse_index.indices();
-  const auto non_zero_length = sparse_tensor->non_zero_length();
   return MakeTensorFromSparseCSXMatrix(
-      SparseMatrixCompressedAxis::ROW, pool, indptr, indices, non_zero_length,
-      sparse_tensor->type(), sparse_tensor->shape(), sparse_tensor->size(),
-      sparse_tensor->raw_data(), sparse_tensor->dim_names());
+      SparseMatrixCompressedAxis::ROW, pool, indptr, indices, sparse_tensor->type(),
+      sparse_tensor->shape(), sparse_tensor->size(), sparse_tensor->raw_data(),
+      sparse_tensor->dim_names());
 }
 
 Result<std::shared_ptr<Tensor>> MakeTensorFromSparseCSCMatrix(
@@ -234,11 +226,10 @@ Result<std::shared_ptr<Tensor>> MakeTensorFromSparseCSCMatrix(
       internal::checked_cast<const SparseCSCIndex&>(*sparse_tensor->sparse_index());
   const auto& indptr = sparse_index.indptr();
   const auto& indices = sparse_index.indices();
-  const auto non_zero_length = sparse_tensor->non_zero_length();
   return MakeTensorFromSparseCSXMatrix(
-      SparseMatrixCompressedAxis::COLUMN, pool, indptr, indices, non_zero_length,
-      sparse_tensor->type(), sparse_tensor->shape(), sparse_tensor->size(),
-      sparse_tensor->raw_data(), sparse_tensor->dim_names());
+      SparseMatrixCompressedAxis::COLUMN, pool, indptr, indices, sparse_tensor->type(),
+      sparse_tensor->shape(), sparse_tensor->size(), sparse_tensor->raw_data(),
+      sparse_tensor->dim_names());
 }
 
 }  // namespace internal

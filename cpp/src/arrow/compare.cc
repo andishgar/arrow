@@ -1251,8 +1251,9 @@ bool StridedFloatTensorContentEquals(const int dim_index, int64_t left_offset,
                                      int64_t right_offset, const Tensor& left,
                                      const Tensor& right, const EqualOptions& opts) {
   using c_type = typename DataType::c_type;
-  static_assert(std::is_floating_point<c_type>::value,
-                "DataType must be a floating point type");
+  static_assert(
+      std::is_floating_point<c_type>::value || std::is_same_v<DataType, HalfFloatType>,
+      "DataType must be a floating point type");
 
   const auto n = left.shape()[dim_index];
   const auto left_stride = left.strides()[dim_index];
@@ -1311,7 +1312,8 @@ bool TensorEquals(const Tensor& left, const Tensor& right, const EqualOptions& o
   }
 
   switch (left.type_id()) {
-    // TODO: Support half-float tensors
+    case Type::HALF_FLOAT:
+      return FloatTensorEquals<HalfFloatType>(left, right, opts);
     // case Type::HALF_FLOAT:
     case Type::FLOAT:
       return FloatTensorEquals<FloatType>(left, right, opts);
@@ -1341,6 +1343,7 @@ bool IntegerSparseTensorDataEquals(const uint8_t* left_data, const uint8_t* righ
   if (left_data == right_data) {
     return true;
   }
+  // TODO: This currently only works if the indices are sorted.
   return memcmp(left_data, right_data, static_cast<size_t>(byte_width * length)) == 0;
 }
 
@@ -1356,6 +1359,7 @@ bool FloatSparseTensorDataEquals(const typename DataType::c_type* left_data,
       return true;
     }
 
+    // TODO: This currently only works if the indices are sorted.
     for (int64_t i = 0; i < length; ++i) {
       const auto left = left_data[i];
       const auto right = right_data[i];
@@ -1387,6 +1391,7 @@ struct SparseTensorEqualsImpl<SparseIndexType, SparseIndexType> {
     const auto& left_index = checked_cast<const SparseIndexType&>(*left.sparse_index());
     const auto& right_index = checked_cast<const SparseIndexType&>(*right.sparse_index());
 
+    // TODO: This currently only works if the indices are sorted.
     if (!left_index.Equals(right_index)) {
       return false;
     }

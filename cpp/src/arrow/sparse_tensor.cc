@@ -64,6 +64,8 @@ Status CheckSparseIndexMaximumValue<Int64Type>(const std::vector<int64_t>& shape
   return Status::OK();
 }
 
+// TODO: Should we document that uint64_t is not supported
+// as an index type?
 template <>
 Status CheckSparseIndexMaximumValue<UInt64Type>(const std::vector<int64_t>& shape) {
   return Status::Invalid("UInt64Type cannot be used as IndexValueType of SparseIndex");

@@ -36,21 +36,33 @@
 #include "arrow/util/sort_internal.h"
 
 namespace arrow {
+namespace {
 
-static inline void CheckSparseIndexFormatType(SparseTensorFormat::type expected,
-                                              const SparseTensor& sparse_tensor) {
+void CheckSparseIndexFormatType(SparseTensorFormat::type expected,
+                                const SparseTensor& sparse_tensor) {
   ASSERT_EQ(expected, sparse_tensor.format_id());
   ASSERT_EQ(expected, sparse_tensor.sparse_index()->format_id());
 }
 
-static inline void AssertCOOIndex(const std::shared_ptr<Tensor>& sidx, const int64_t nth,
-                                  const std::vector<int64_t>& expected_values) {
+void AssertCOOIndex(const std::shared_ptr<Tensor>& sidx, const int64_t nth,
+                    const std::vector<int64_t>& expected_values) {
   int64_t n = static_cast<int64_t>(expected_values.size());
   for (int64_t i = 0; i < n; ++i) {
     ASSERT_EQ(expected_values[i], sidx->Value<Int64Type>({nth, i}));
   }
 }
 
+std::vector<uint16_t> CreatFloat16ArrayFromDoubleArray(
+    const std::vector<double>& values) {
+  std::vector<uint16_t> result;
+  result.reserve(values.size());
+  for (auto& value : values) {
+    result.push_back(util::Float16::FromDouble(value).bits());
+  }
+  return result;
+}
+
+}  // namespace
 //-----------------------------------------------------------------------------
 // SparseCOOIndex
 
@@ -413,6 +425,113 @@ TEST_F(TestSparseCOOTensor, TestToTensor) {
   ASSERT_TRUE(tensor.Equals(*dense_tensor));
 }
 
+TEST_F(TestSparseCOOTensor, SegFault) {
+  // clang-format off
+  std::vector<float> data{
+    -0.0, -0.0, -0.0,
+    -0.0, -0.0, -0.0,
+    -0.0, -0.0, -0.0,
+    -1.0, -0.0, -0.0,
+    };
+
+  // clang-format on
+
+  std::vector<int64_t> shape = {4, 3};
+  auto buffer = Buffer::FromVector(data);
+  ASSERT_OK_AND_ASSIGN(auto dense_tensor, Tensor::Make(float32(), buffer, shape));
+  ASSERT_OK_AND_ASSIGN(auto sparse_coo_tensor,
+                       SparseCOOTensor::Make(*dense_tensor, int64()));
+  ASSERT_OK_AND_ASSIGN(auto new_dense_tensor, sparse_coo_tensor->ToTensor());
+  ASSERT_TRUE(new_dense_tensor->Equals(*dense_tensor));
+}
+
+TEST_F(TestSparseCOOTensor, ColumnMajorTensor) {
+  // clang-format off
+  std::vector<int> data{
+    1, 4, 7, 10,
+    2, 5, 8, 11,
+    3, 6, 9, 12
+                      };
+  // clang-format on
+  std::vector<int> data_2{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+  auto buffer = Buffer::FromVector(data);
+  auto buffer_2 = Buffer::FromVector(data_2);
+  std::vector<int64_t> shape = {4, 3};
+  std::vector<int64_t> strides = {sizeof(int), 4 * sizeof(int)};
+  ASSERT_OK_AND_ASSIGN(auto tensor, Tensor::Make(int32(), buffer, shape, strides));
+  ASSERT_OK_AND_ASSIGN(auto tensor_2, Tensor::Make(int32(), buffer_2, shape));
+  ASSERT_TRUE(tensor->Equals(*tensor_2));
+  ASSERT_TRUE(tensor->is_contiguous());
+  ASSERT_TRUE(tensor->is_column_major());
+  ASSERT_OK_AND_ASSIGN(auto sparse_tensor, SparseCOOTensor::Make(*tensor))
+  ASSERT_OK_AND_ASSIGN(auto new_tensor, sparse_tensor->ToTensor());
+  ASSERT_EQ(12, sparse_tensor->non_zero_length());
+  ASSERT_TRUE(new_tensor->is_contiguous());
+  ASSERT_TRUE(new_tensor->is_row_major());
+
+  ASSERT_TRUE(new_tensor->Equals(*tensor));
+}
+
+TEST_F(TestSparseCOOTensor,ColumnMajorIndexTest) {
+  // clang-format off
+  std::vector<int64_t> values = {1, 2, 3,
+                                 4, 5, 6,
+                                 7, 8, 9,
+                                 10, 11, 12
+    };
+  std::vector<int64_t> CooIndices = {0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3,
+                                     0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2};
+  // clang-format on
+  auto data_buffer = Buffer::FromVector(values);
+  auto indices_buffer = Buffer::FromVector(CooIndices);
+  ASSERT_OK_AND_ASSIGN(auto indices_tensor,
+                       Tensor::Make(int64(), indices_buffer, {12, 2}, {8, 96}));
+  ASSERT_TRUE(indices_tensor->is_column_major());
+  ASSERT_OK_AND_ASSIGN(auto sparse_coo_index, SparseCOOIndex::Make(indices_tensor, true));
+  auto data_pointer = reinterpret_cast<const int64_t*>(data_buffer->data());
+  auto tensor = Tensor::Make(int64(), data_buffer, {4, 3}).ValueOrDie();
+  ASSERT_TRUE(tensor->is_row_major());
+  SparseCOOTensor sparse_tensor(sparse_coo_index, int64(), data_buffer, {4, 3}, {});
+  // SparseCooIndex is stored as column major tensor
+  ASSERT_TRUE(internal::checked_pointer_cast<SparseCOOIndex>(sparse_tensor.sparse_index())
+                  ->indices()
+                  ->is_column_major());
+  // Check the correctness of indices
+  for (int64_t i = 0; i < 12; i++) {
+    auto row =
+        internal::checked_pointer_cast<SparseCOOIndex>(sparse_tensor.sparse_index())
+            ->indices()
+            ->Value<Int64Type>({i, 0});
+    auto column =
+        internal::checked_pointer_cast<SparseCOOIndex>(sparse_tensor.sparse_index())
+            ->indices()
+            ->Value<Int64Type>({i, 1});
+    ASSERT_TRUE(data_pointer[i] == tensor->Value<Int64Type>({row, column}));
+  }
+  auto new_tensor = sparse_tensor.ToTensor().ValueOrDie();
+  ASSERT_TRUE(new_tensor->is_row_major());
+  ASSERT_TRUE(new_tensor->Equals(*tensor));
+}
+
+TEST_F(TestSparseCOOTensor, HalfFloat) {
+  // clang-format off
+  std::vector<double> double_data{
+    -0.0, -0.0, -0.0,
+    -0.0, -0.0, -0.0,
+    -0.0, -0.0, -0.0,
+    -1.0, -0.0, -0.0,
+    };
+  // clang-format on
+
+  auto float16_data = CreatFloat16ArrayFromDoubleArray(double_data);
+  auto float16_buffer = Buffer::FromVector(float16_data);
+  ASSERT_OK_AND_ASSIGN(auto dense_tensor, Tensor::Make(float16(), float16_buffer, {4, 3}))
+  ASSERT_OK_AND_ASSIGN(auto sparse_tensor, SparseCOOTensor::Make(*dense_tensor));
+  ASSERT_EQ(1, sparse_tensor->non_zero_length());
+  ASSERT_OK_AND_ASSIGN(auto new_dense_tenspr, sparse_tensor->ToTensor());
+  ASSERT_TRUE(new_dense_tenspr->Equals(*dense_tensor));
+}
+
 template <typename ValueType>
 class TestSparseCOOTensorEquality : public TestSparseTensorBase<ValueType> {
  public:
@@ -685,7 +804,7 @@ TYPED_TEST_P(TestSparseCOOTensorForIndexValueType,
 
   std::vector<int64_t> sparse_values_2 = sparse_values_1;
   ASSERT_OK_AND_ASSIGN(std::shared_ptr<SparseCOOTensor> st2,
-                       this->MakeSparseTensor(si_row_major, sparse_values_2));
+                       this->MakeSparseTensor(si_col_major, sparse_values_2));
 
   ASSERT_TRUE(st2->Equals(*st1));
 }
@@ -867,6 +986,70 @@ TEST_F(TestSparseCSRMatrix, TestToTensor) {
 
   ASSERT_OK_AND_ASSIGN(std::shared_ptr<Tensor> dense_tensor, sparse_tensor->ToTensor());
   ASSERT_TRUE(tensor.Equals(*dense_tensor));
+}
+
+TEST_F(TestSparseCSRMatrix, SegFault) {
+  // clang-format off
+  std::vector<float> data{
+    -0.0, -0.0, -0.0,
+    -0.0, -0.0, -0.0,
+    -0.0, -0.0, -0.0,
+    -1.0, -0.0, -0.0,
+    };
+
+  // clang-format on
+
+  std::vector<int64_t> shape = {4, 3};
+  auto buffer = Buffer::FromVector(data);
+  ASSERT_OK_AND_ASSIGN(auto dense_tensor, Tensor::Make(float32(), buffer, shape));
+  ASSERT_OK_AND_ASSIGN(auto sparse_coo_tensor,
+                       SparseCSRMatrix::Make(*dense_tensor, int64()));
+}
+
+TEST_F(TestSparseCSRMatrix, ColumnMajor) {
+  // clang-format off
+  std::vector<int> data{
+    1, 4, 7, 10,
+    2, 5, 8, 11,
+    3, 6, 9, 12
+                      };
+  // clang-format on
+  std::vector<int> data_2{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+  auto buffer = Buffer::FromVector(data);
+  auto buffer_2 = Buffer::FromVector(data_2);
+  std::vector<int64_t> shape = {4, 3};
+  std::vector<int64_t> strides = {sizeof(int), 4 * sizeof(int)};
+  ASSERT_OK_AND_ASSIGN(auto tensor, Tensor::Make(int32(), buffer, shape, strides));
+  ASSERT_OK_AND_ASSIGN(auto tensor_2, Tensor::Make(int32(), buffer_2, shape));
+  ASSERT_TRUE(tensor->Equals(*tensor_2));
+  ASSERT_TRUE(tensor->is_contiguous());
+  ASSERT_TRUE(tensor->is_column_major());
+  ASSERT_OK_AND_ASSIGN(auto sparse_tensor, SparseCSRMatrix::Make(*tensor))
+  ASSERT_OK_AND_ASSIGN(auto new_tensor, sparse_tensor->ToTensor());
+  ASSERT_EQ(12, sparse_tensor->non_zero_length());
+  ASSERT_TRUE(new_tensor->is_contiguous());
+  ASSERT_TRUE(new_tensor->is_row_major());
+
+  ASSERT_TRUE(new_tensor->Equals(*tensor));
+}
+
+TEST_F(TestSparseCSRMatrix, HalfFloat) {
+  // clang-format off
+  std::vector<double> double_data{
+    -0.0, -0.0, -0.0,
+    -0.0, -0.0, -0.0,
+    -0.0, -0.0, -0.0,
+    -1.0, -0.0, -0.0,
+    };
+  // clang-format on
+
+  auto float16_data = CreatFloat16ArrayFromDoubleArray(double_data);
+  auto float16_buffer = Buffer::FromVector(float16_data);
+  ASSERT_OK_AND_ASSIGN(auto dense_tensor, Tensor::Make(float16(), float16_buffer, {4, 3}))
+  ASSERT_OK_AND_ASSIGN(auto sparse_tensor, SparseCSRMatrix::Make(*dense_tensor));
+  ASSERT_EQ(1, sparse_tensor->non_zero_length());
+  ASSERT_OK_AND_ASSIGN(auto new_dense_tenspr, sparse_tensor->ToTensor());
+  ASSERT_TRUE(new_dense_tenspr->Equals(*dense_tensor));
 }
 
 template <typename ValueType>
@@ -1202,6 +1385,70 @@ TEST_F(TestSparseCSCMatrix, TestToTensor) {
 
   ASSERT_OK_AND_ASSIGN(std::shared_ptr<Tensor> dense_tensor, sparse_tensor->ToTensor());
   ASSERT_TRUE(tensor.Equals(*dense_tensor));
+}
+
+TEST_F(TestSparseCSCMatrix, SegFault) {
+  // clang-format off
+  std::vector<float> data{
+    -0.0, -0.0, -0.0,
+    -0.0, -0.0, -0.0,
+    -0.0, -0.0, -0.0,
+    -1.0, -0.0, -0.0,
+    };
+
+  // clang-format on
+
+  std::vector<int64_t> shape = {4, 3};
+  auto buffer = Buffer::FromVector(data);
+  ASSERT_OK_AND_ASSIGN(auto dense_tensor, Tensor::Make(float32(), buffer, shape));
+  ASSERT_OK_AND_ASSIGN(auto sparse_coo_tensor,
+                       SparseCSCMatrix::Make(*dense_tensor, int64()));
+}
+
+TEST_F(TestSparseCSCMatrix, ColumnMajor) {
+  // clang-format off
+  std::vector<int> data{
+    1, 4, 7, 10,
+    2, 5, 8, 11,
+    3, 6, 9, 12
+                      };
+  // clang-format on
+  std::vector<int> data_2{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+  auto buffer = Buffer::FromVector(data);
+  auto buffer_2 = Buffer::FromVector(data_2);
+  std::vector<int64_t> shape = {4, 3};
+  std::vector<int64_t> strides = {sizeof(int), 4 * sizeof(int)};
+  ASSERT_OK_AND_ASSIGN(auto tensor, Tensor::Make(int32(), buffer, shape, strides));
+  ASSERT_OK_AND_ASSIGN(auto tensor_2, Tensor::Make(int32(), buffer_2, shape));
+  ASSERT_TRUE(tensor->Equals(*tensor_2));
+  ASSERT_TRUE(tensor->is_contiguous());
+  ASSERT_TRUE(tensor->is_column_major());
+  ASSERT_OK_AND_ASSIGN(auto sparse_tensor, SparseCSCMatrix::Make(*tensor))
+  ASSERT_OK_AND_ASSIGN(auto new_tensor, sparse_tensor->ToTensor());
+  ASSERT_EQ(12, sparse_tensor->non_zero_length());
+  ASSERT_TRUE(new_tensor->is_contiguous());
+  ASSERT_TRUE(new_tensor->is_row_major());
+
+  ASSERT_TRUE(new_tensor->Equals(*tensor));
+}
+
+TEST_F(TestSparseCSCMatrix, HalfFloat) {
+  // clang-format off
+  std::vector<double> double_data{
+    -0.0, -0.0, -0.0,
+    -0.0, -0.0, -0.0,
+    -0.0, -0.0, -0.0,
+    -1.0, -0.0, -0.0,
+    };
+  // clang-format on
+
+  auto float16_data = CreatFloat16ArrayFromDoubleArray(double_data);
+  auto float16_buffer = Buffer::FromVector(float16_data);
+  ASSERT_OK_AND_ASSIGN(auto dense_tensor, Tensor::Make(float16(), float16_buffer, {4, 3}))
+  ASSERT_OK_AND_ASSIGN(auto sparse_tensor, SparseCSCMatrix::Make(*dense_tensor));
+  ASSERT_EQ(1, sparse_tensor->non_zero_length());
+  ASSERT_OK_AND_ASSIGN(auto new_dense_tenspr, sparse_tensor->ToTensor());
+  ASSERT_TRUE(new_dense_tenspr->Equals(*dense_tensor));
 }
 
 template <typename ValueType>
@@ -1659,6 +1906,70 @@ INSTANTIATE_TYPED_TEST_SUITE_P(TestUInt32, TestSparseCSFTensorForIndexValueType,
                                UInt32Type);
 INSTANTIATE_TYPED_TEST_SUITE_P(TestInt64, TestSparseCSFTensorForIndexValueType,
                                Int64Type);
+
+TEST_F(TestSparseCSFTensor, SegFault) {
+  // clang-format off
+  std::vector<float> data{
+    -0.0, -0.0, -0.0,
+    -0.0, -0.0, -0.0,
+    -0.0, -0.0, -0.0,
+    -1.0, -0.0, -0.0,
+    };
+
+  // clang-format on
+
+  std::vector<int64_t> shape = {4, 3};
+  auto buffer = Buffer::FromVector(data);
+  ASSERT_OK_AND_ASSIGN(auto dense_tensor, Tensor::Make(float32(), buffer, shape));
+  ASSERT_OK_AND_ASSIGN(auto sparse_csf_tensor,
+                       SparseCSFTensor::Make(*dense_tensor, int64()));
+}
+
+TEST_F(TestSparseCSFTensor, ColumnMajor) {
+  // clang-format off
+  std::vector<int> data{
+    1, 4, 7, 10,
+    2, 5, 8, 11,
+    3, 6, 9, 12
+                      };
+  // clang-format on
+  std::vector<int> data_2{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+  auto buffer = Buffer::FromVector(data);
+  auto buffer_2 = Buffer::FromVector(data_2);
+  std::vector<int64_t> shape = {4, 3};
+  std::vector<int64_t> strides = {sizeof(int), 4 * sizeof(int)};
+  ASSERT_OK_AND_ASSIGN(auto tensor, Tensor::Make(int32(), buffer, shape, strides));
+  ASSERT_OK_AND_ASSIGN(auto tensor_2, Tensor::Make(int32(), buffer_2, shape));
+  ASSERT_TRUE(tensor->Equals(*tensor_2));
+  ASSERT_TRUE(tensor->is_contiguous());
+  ASSERT_TRUE(tensor->is_column_major());
+  ASSERT_OK_AND_ASSIGN(auto sparse_tensor, SparseCSFTensor::Make(*tensor))
+  ASSERT_OK_AND_ASSIGN(auto new_tensor, sparse_tensor->ToTensor());
+  ASSERT_EQ(12, sparse_tensor->non_zero_length());
+  ASSERT_TRUE(new_tensor->is_contiguous());
+  ASSERT_TRUE(new_tensor->is_row_major());
+
+  ASSERT_TRUE(new_tensor->Equals(*tensor));
+}
+
+TEST_F(TestSparseCSFTensor, HalfFloat) {
+  // clang-format off
+  std::vector<double> double_data{
+    -0.0, -0.0, -0.0,
+    -0.0, -0.0, -0.0,
+    -0.0, -0.0, -0.0,
+    -1.0, -0.0, -0.0,
+    };
+  // clang-format on
+
+  auto float16_data = CreatFloat16ArrayFromDoubleArray(double_data);
+  auto float16_buffer = Buffer::FromVector(float16_data);
+  ASSERT_OK_AND_ASSIGN(auto dense_tensor, Tensor::Make(float16(), float16_buffer, {4, 3}))
+  ASSERT_OK_AND_ASSIGN(auto sparse_tensor, SparseCSFTensor::Make(*dense_tensor));
+  ASSERT_EQ(1, sparse_tensor->non_zero_length());
+  ASSERT_OK_AND_ASSIGN(auto new_dense_tenspr, sparse_tensor->ToTensor());
+  ASSERT_TRUE(new_dense_tenspr->Equals(*dense_tensor));
+}
 
 TEST(TestSparseCSFMatrixForUInt64Index, Make) {
   int16_t dense_values[2][3][4][5] = {};

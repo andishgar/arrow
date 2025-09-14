@@ -30,6 +30,7 @@
 #include "arrow/type_traits.h"
 #include "arrow/util/macros.h"
 #include "arrow/util/visibility.h"
+#include "arrow/util/float16.h"
 
 namespace arrow {
 
@@ -54,6 +55,16 @@ constexpr bool is_tensor_supported(Type::type type_id) {
 }
 
 namespace internal {
+
+template <typename ValueDataType>
+inline bool is_not_zero(typename ValueDataType::c_type value) {
+  if constexpr (std::is_same_v<HalfFloatType, ValueDataType>) {
+    return !util::Float16::FromBits(value).is_zero();
+  } else {
+    typename ValueDataType::c_type zero = 0;
+    return value != zero;
+  }
+}
 
 ARROW_EXPORT
 Status ComputeRowMajorStrides(const FixedWidthType& type,

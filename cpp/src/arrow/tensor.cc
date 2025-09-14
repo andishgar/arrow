@@ -33,6 +33,7 @@
 #include "arrow/type.h"
 #include "arrow/type_traits.h"
 #include "arrow/util/checked_cast.h"
+#include "arrow/util/float16.h"
 #include "arrow/util/int_util_overflow.h"
 #include "arrow/util/logging_internal.h"
 #include "arrow/util/unreachable.h"
@@ -85,7 +86,7 @@ Status ComputeColumnMajorStrides(const FixedWidthType& type,
   if (!shape.empty() && shape.back() > 0) {
     total = byte_width;
     for (size_t i = 0; i < ndim - 1; ++i) {
-      if (internal::MultiplyWithOverflow(total, shape[i], &total)) {
+      if (ARROW_PREDICT_FALSE(internal::MultiplyWithOverflow(total, shape[i], &total))) {
         return Status::Invalid(
             "Column-major strides computed from shape would not fit in 64-bit "
             "integer");
@@ -458,18 +459,22 @@ const std::string& Tensor::dim_name(int i) const {
   }
 }
 
+// TODO: Should this be cached?
 int64_t Tensor::size() const {
   return std::accumulate(shape_.begin(), shape_.end(), 1LL, std::multiplies<int64_t>());
 }
 
+// TODO: Should this be cached?
 bool Tensor::is_contiguous() const {
   return internal::IsTensorStridesContiguous(type_, shape_, strides_);
 }
 
+// TODO: Should this be cached?
 bool Tensor::is_row_major() const {
   return IsTensorStridesRowMajor(type_, shape_, strides_);
 }
 
+// TODO: Should this be cached?
 bool Tensor::is_column_major() const {
   return IsTensorStridesColumnMajor(type_, shape_, strides_);
 }
@@ -485,13 +490,14 @@ namespace {
 template <typename TYPE>
 int64_t StridedTensorCountNonZero(int dim_index, int64_t offset, const Tensor& tensor) {
   using c_type = typename TYPE::c_type;
-  const c_type zero = c_type(0);
   int64_t nnz = 0;
   if (dim_index == tensor.ndim() - 1) {
     for (int64_t i = 0; i < tensor.shape()[dim_index]; ++i) {
-      const auto* ptr = tensor.raw_data() + offset + i * tensor.strides()[dim_index];
-      auto& elem = *reinterpret_cast<const c_type*>(ptr);
-      if (elem != zero) ++nnz;
+      auto const* ptr = tensor.raw_data() + offset + i * tensor.strides()[dim_index];
+      if (auto& elem = *reinterpret_cast<c_type const*>(ptr);
+          internal::is_not_zero<TYPE>(elem)) {
+        ++nnz;
+      }
     }
     return nnz;
   }
@@ -507,7 +513,7 @@ int64_t ContiguousTensorCountNonZero(const Tensor& tensor) {
   using c_type = typename TYPE::c_type;
   auto* data = reinterpret_cast<const c_type*>(tensor.raw_data());
   return std::count_if(data, data + tensor.size(),
-                       [](const c_type& x) { return x != 0; });
+                       [](c_type const& x) { return internal::is_not_zero<TYPE>(x); });
 }
 
 template <typename TYPE>
