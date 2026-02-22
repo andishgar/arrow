@@ -69,7 +69,11 @@ struct IsPositiveVisitor {
 
   template <typename... Ts>
   Status Visit(const NumericScalar<Ts...>& scalar) {
-    result = scalar.value > 0;
+    if constexpr (std::is_same_v<HalfFloatType,Ts ...>) {
+      result = scalar.value > Float16::FromFloat(0.0);
+    }else {
+      result = scalar.value > 0;
+    }
     return Status::OK();
   }
   template <typename... Ts>

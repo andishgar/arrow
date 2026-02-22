@@ -89,10 +89,10 @@ int FloatToStringFormatter::FormatFloat(double v, char* out_buffer, int out_size
   return builder.position();
 }
 
-int FloatToStringFormatter::FormatFloat(uint16_t v, char* out_buffer, int out_size) {
+int FloatToStringFormatter::FormatFloat(Float16 v, char* out_buffer, int out_size) {
   DCHECK_GE(out_size, kMinBufferSize);
   util::double_conversion::StringBuilder builder(out_buffer, out_size);
-  bool result = impl_->converter_.ToShortest(Float16::FromBits(v).ToFloat(), &builder);
+  bool result = impl_->converter_.ToShortest(v.ToFloat(), &builder);
   DCHECK(result);
   ARROW_UNUSED(result);
   return builder.position();

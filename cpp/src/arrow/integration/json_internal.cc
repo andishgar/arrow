@@ -537,7 +537,11 @@ class ArrayWriter {
     const auto data = arr.raw_values();
     for (int64_t i = 0; i < arr.length(); ++i) {
       if (arr.IsValid(i)) {
-        writer_->Double(data[i]);
+        if constexpr(std::is_same_v<HalfFloatArray,ArrayType>) {
+          writer_->Double(data[i].ToDouble());
+        }else {
+          writer_->Double(data[i]);
+        }
       } else {
         WriteRawNumber(null_string);
       }

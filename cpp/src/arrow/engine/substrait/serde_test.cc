@@ -630,7 +630,7 @@ TEST(Substrait, ArrowSpecificLiterals) {
   CheckArrowSpecificLiteral(Time64Scalar(-7, TimeUnit::NANO));
   // Negative date scalars DO make sense and we should make sure they work
   CheckArrowSpecificLiteral(Date64Scalar(-86400000));
-  CheckArrowSpecificLiteral(HalfFloatScalar(0));
+  CheckArrowSpecificLiteral(HalfFloatScalar(Float16(0.0)));
   CheckArrowSpecificLiteral(LargeStringScalar("hello"));
   CheckArrowSpecificLiteral(LargeBinaryScalar("hello"));
   CheckArrowSpecificLiteral(MakeNullScalar(null()));

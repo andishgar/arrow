@@ -78,12 +78,12 @@ struct WasTruncated {
 template <typename OutType>
 struct WasTruncated<HalfFloatType, OutType> {
   using OutT = typename OutType::c_type;
-  static bool Check(OutT out_val, uint16_t in_val) {
-    return static_cast<float>(out_val) != Float16::FromBits(in_val).ToFloat();
+  static bool Check(OutT out_val, Float16 in_val) {
+    return static_cast<float>(out_val) !=in_val.ToFloat();
   }
 
-  static bool CheckMaybeNull(OutT out_val, uint16_t in_val, bool is_valid) {
-    return is_valid && static_cast<float>(out_val) != Float16::FromBits(in_val).ToFloat();
+  static bool CheckMaybeNull(OutT out_val, Float16 in_val, bool is_valid) {
+    return is_valid && static_cast<float>(out_val) != in_val.ToFloat();
   }
 };
 

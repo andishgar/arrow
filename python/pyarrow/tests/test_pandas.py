@@ -24,7 +24,6 @@ import warnings
 
 from collections import OrderedDict
 from datetime import date, datetime, time, timedelta, timezone
-from zoneinfo import ZoneInfo
 
 import hypothesis as h
 import hypothesis.strategies as st
@@ -4957,7 +4956,7 @@ def test_timestamp_as_object_non_nanosecond(resolution, tz, dt):
         assert isinstance(result[0], datetime)
         if tz:
             assert result[0].tzinfo is not None
-            expected = dt.replace(tzinfo=timezone.utc).astimezone(ZoneInfo(tz))
+            expected = result[0].tzinfo.fromutc(dt)
         else:
             assert result[0].tzinfo is None
             expected = dt

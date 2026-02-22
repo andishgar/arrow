@@ -57,9 +57,6 @@ using internal::checked_cast;
 class ExtensionType;
 
 namespace ipc {
-
-using internal::kArrowMagicBytes;
-
 namespace feather {
 
 namespace {
@@ -790,8 +787,8 @@ Result<std::shared_ptr<Reader>> Reader::Open(
     // IPC Read options are ignored for ReaderV1
     RETURN_NOT_OK(result->Open(source));
     return result;
-  } else if (std::string_view(buffer->data_as<char>(), kArrowMagicBytes.size()) ==
-             kArrowMagicBytes) {
+  } else if (memcmp(buffer->data(), internal::kArrowMagicBytes,
+                    strlen(internal::kArrowMagicBytes)) == 0) {
     std::shared_ptr<ReaderV2> result = std::make_shared<ReaderV2>();
     RETURN_NOT_OK(result->Open(source, options));
     return result;

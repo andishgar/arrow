@@ -286,27 +286,27 @@ TEST(Formatting, Double) {
 TEST(Formatting, HalfFloat) {
   StringFormatter<HalfFloatType> formatter;
 
-  AssertFormatting(formatter, Float16(0.0f).bits(), "0");
-  AssertFormatting(formatter, Float16(-0.0f).bits(), "-0");
-  AssertFormatting(formatter, Float16(1.5f).bits(), "1.5");
+  AssertFormatting(formatter, Float16(0.0f), "0");
+  AssertFormatting(formatter, Float16(-0.0f), "-0");
+  AssertFormatting(formatter, Float16(1.5f), "1.5");
 
   // Slightly adapted from values present here
   // https://blogs.mathworks.com/cleve/2017/05/08/half-precision-16-bit-floating-point-arithmetic/
-  AssertFormatting(formatter, 0x3c00, "1");
-  AssertFormatting(formatter, 0x3c01, "1.0009765625");
-  AssertFormatting(formatter, 0x0400, "0.00006103515625");
-  AssertFormatting(formatter, 0x0001, "5.960464477539063e-8");
+  AssertFormatting(formatter, Float16::FromBits(0x3c00), "1");
+  AssertFormatting(formatter, Float16::FromBits(0x3c01), "1.0009765625");
+  AssertFormatting(formatter, Float16::FromBits(0x0400), "0.00006103515625");
+  AssertFormatting(formatter, Float16::FromBits(0x0001), "5.960464477539063e-8");
 
   // Can't avoid loss of precision here.
-  AssertFormatting(formatter, Float16(1234.567f).bits(), "1235");
-  AssertFormatting(formatter, Float16(1e3f).bits(), "1000");
-  AssertFormatting(formatter, Float16(1e4f).bits(), "10000");
-  AssertFormatting(formatter, Float16(1e10f).bits(), "inf");
-  AssertFormatting(formatter, Float16(1e15f).bits(), "inf");
+  AssertFormatting(formatter, Float16(1234.567f), "1235");
+  AssertFormatting(formatter, Float16(1e3f), "1000");
+  AssertFormatting(formatter, Float16(1e4f), "10000");
+  AssertFormatting(formatter, Float16(1e10f), "inf");
+  AssertFormatting(formatter, Float16(1e15f), "inf");
 
-  AssertFormatting(formatter, 0xffff, "nan");
-  AssertFormatting(formatter, 0x7c00, "inf");
-  AssertFormatting(formatter, 0xfc00, "-inf");
+  AssertFormatting(formatter, Float16::FromBits(0xffff), "nan");
+  AssertFormatting(formatter, Float16::FromBits(0x7c00), "inf");
+  AssertFormatting(formatter, Float16::FromBits(0xfc00), "-inf");
 }
 
 template <typename T>

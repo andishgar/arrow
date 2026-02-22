@@ -96,12 +96,12 @@ void random_Int96_numbers(int n, uint32_t seed, int32_t min_value, int32_t max_v
 }
 
 void random_float16_numbers(int n, uint32_t seed, ::arrow::util::Float16 min_value,
-                            ::arrow::util::Float16 max_value, uint16_t* out) {
+                            ::arrow::util::Float16 max_value,  ::arrow::util::Float16* out) {
   std::vector<float> values(n);
   random_numbers(n, seed, static_cast<float>(min_value), static_cast<float>(max_value),
                  values.data());
   for (int i = 0; i < n; ++i) {
-    out[i] = ::arrow::util::Float16(values[i]).bits();
+    out[i] = ::arrow::util::Float16(values[i]);
   }
 }
 

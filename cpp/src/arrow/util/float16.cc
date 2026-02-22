@@ -19,6 +19,7 @@
 #include <type_traits>
 
 #include "arrow/util/float16.h"
+#include "arrow/util/endian.h"
 #include "arrow/util/ubsan.h"
 
 namespace arrow {
@@ -218,6 +219,16 @@ double Float16::ToDouble() const {
 Float16 Float16::FromDouble(double d) {
   const uint64_t d_bits = SafeCopy<uint64_t>(d);
   return FromBits(BinaryConverter<uint64_t>::ToBinary16(d_bits));
+}
+
+/// \brief Read a `Float16` from memory in little-endian byte order
+Float16 Float16::FromLittleEndian(const uint8_t* src) {
+  return FromBits(::arrow::bit_util::FromLittleEndian(SafeLoadAs<uint16_t>(src)));
+}
+
+/// \brief Read a `Float16` from memory in big-endian byte order
+Float16 Float16::FromBigEndian(const uint8_t* src) {
+  return FromBits(::arrow::bit_util::FromBigEndian(SafeLoadAs<uint16_t>(src)));
 }
 
 ARROW_EXPORT std::ostream& operator<<(std::ostream& os, Float16 arg) {

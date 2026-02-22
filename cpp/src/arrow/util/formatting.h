@@ -281,7 +281,7 @@ class ARROW_EXPORT FloatToStringFormatter {
   // Returns the number of characters written
   int FormatFloat(float v, char* out_buffer, int out_size);
   int FormatFloat(double v, char* out_buffer, int out_size);
-  int FormatFloat(uint16_t v, char* out_buffer, int out_size);
+  int FormatFloat(util::Float16 v, char* out_buffer, int out_size);
 
  protected:
   struct Impl;

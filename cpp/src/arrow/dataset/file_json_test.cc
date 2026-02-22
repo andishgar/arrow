@@ -80,7 +80,8 @@ struct WriteVisitor {
   template <typename T>
   enable_if_physical_floating_point<T, Status> Visit(const T*) {
     const auto& scalar = checked_cast<const NumericScalar<T>&>(scalar_);
-    return OK(writer_.Double(scalar.value));
+
+    return OK(writer_.Double(static_cast<double>(scalar.value)));
   }
 
   Status Visit(const BooleanType*) {

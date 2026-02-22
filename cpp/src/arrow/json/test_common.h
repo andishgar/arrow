@@ -107,8 +107,14 @@ struct GenerateImpl {
 
   template <typename T>
   enable_if_physical_floating_point<T, Status> Visit(const T&) {
-    auto val = std::normal_distribution<typename T::c_type>{0, 1 << 10}(e);
-    return OK(writer.Double(val));
+    if constexpr (is_half_float_type<T>::value) {
+      auto val = std::normal_distribution<float>{0, 1 << 10}(e);
+      return OK(writer.Double(val));
+    }else {
+      auto val = std::normal_distribution<typename T::c_type>{0, 1 << 10}(e);
+      return OK(writer.Double(val));
+    }
+
   }
 
   Status GenerateUtf8(const DataType&) {

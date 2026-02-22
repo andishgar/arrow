@@ -32,6 +32,9 @@
 #include "arrow/array/builder_union.h"
 #include "arrow/chunked_array.h"
 #include "arrow/json/from_string.h"
+
+#include <arrow/util/logger.h>
+
 #include "arrow/scalar.h"
 #include "arrow/type_traits.h"
 #include "arrow/util/checked_cast.h"
@@ -253,32 +256,31 @@ enable_if_unsigned_integer<T, Status> ConvertNumber(const rj::Value& json_obj,
 // Convert float16/HalfFloatType
 template <typename T>
 enable_if_half_float<T, Status> ConvertNumber(const rj::Value& json_obj,
-                                              const DataType& type, uint16_t* out) {
+                                              const DataType& type, Float16* out) {
   if (json_obj.IsDouble()) {
     double f64 = json_obj.GetDouble();
-    *out = Float16(f64).bits();
+    *out = Float16(f64);
     return Status::OK();
   } else if (json_obj.IsUint()) {
     uint32_t u32t = json_obj.GetUint();
     double f64 = static_cast<double>(u32t);
-    *out = Float16(f64).bits();
+    *out = Float16(f64);
     return Status::OK();
   } else if (json_obj.IsInt()) {
     int32_t i32t = json_obj.GetInt();
     double f64 = static_cast<double>(i32t);
-    *out = Float16(f64).bits();
+    *out = Float16(f64);
     return Status::OK();
   } else {
-    *out = static_cast<uint16_t>(0);
+    *out = Float16(0);
     return JSONTypeError("unsigned int", json_obj.GetType());
   }
 }
 
 // Convert single floating point value
 template <typename T>
-enable_if_physical_floating_point<T, Status> ConvertNumber(const rj::Value& json_obj,
-                                                           const DataType& type,
-                                                           typename T::c_type* out) {
+enable_if_t<std::is_same_v<T, FloatType> || std::is_same_v<T, DoubleType>, Status>
+ConvertNumber(const rj::Value& json_obj, const DataType& type, typename T::c_type* out) {
   if (json_obj.IsNumber()) {
     *out = static_cast<typename T::c_type>(json_obj.GetDouble());
     return Status::OK();

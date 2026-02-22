@@ -352,17 +352,16 @@ TEST_F(TestPrettyPrint, HalfFloat) {
   null
 ])expected";
 
-  std::vector<uint16_t> values = {
-      Float16(-1e10f).bits(), Float16(-1234.0f).bits(),   Float16(-0.0f).bits(),
-      Float16(0.0f).bits(),   Float16(1.0f).bits(),       Float16(1.2f).bits(),
-      Float16(2.5f).bits(),   Float16(3.9921875f).bits(), Float16(4.125f).bits(),
-      Float16(1e4f).bits(),   Float16(12345.0f).bits(),   Float16(1e5f).bits(),
-      Float16(NAN).bits(),    Float16(6.10f).bits()};
+  std::vector<Float16> values = {Float16(-1e10f), Float16(-1234.0f),   Float16(-0.0f),
+                                 Float16(0.0f),   Float16(1.0f),       Float16(1.2f),
+                                 Float16(2.5f),   Float16(3.9921875f), Float16(4.125f),
+                                 Float16(1e4f),   Float16(12345.0f),   Float16(1e5f),
+                                 Float16(NAN),    Float16(6.10f)};
 
   std::vector<bool> is_valid(values.size(), true);
   is_valid.back() = false;
 
-  CheckPrimitive<HalfFloatType, uint16_t>({0, 10}, is_valid, values, expected);
+  CheckPrimitive<HalfFloatType, Float16>({0, 10}, is_valid, values, expected);
 }
 
 TEST_F(TestPrettyPrint, DateTimeTypes) {

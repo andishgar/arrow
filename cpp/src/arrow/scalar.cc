@@ -1103,15 +1103,20 @@ template <typename To, typename From>
 enable_if_number<To, Result<std::shared_ptr<Scalar>>> CastImpl(
     const NumericScalar<From>& from, std::shared_ptr<DataType> to_type) {
   using ToScalar = typename TypeTraits<To>::ScalarType;
-  return std::make_shared<ToScalar>(static_cast<typename To::c_type>(from.value),
-                                    std::move(to_type));
+  if constexpr (std::is_same_v<From, HalfFloatType>) {
+    return std::make_shared<ToScalar>(typename To::c_type(from.value.ToFloat()),
+                                  std::move(to_type));
+  } else {
+    return std::make_shared<ToScalar>(typename To::c_type(from.value),
+                                      std::move(to_type));
+  }
 }
 
 // numeric to boolean
 template <typename To, typename From>
 enable_if_boolean<To, Result<std::shared_ptr<Scalar>>> CastImpl(
     const NumericScalar<From>& from, std::shared_ptr<DataType> to_type) {
-  constexpr auto zero = static_cast<typename From::c_type>(0);
+  auto zero = typename From::c_type(0);
   return std::make_shared<BooleanScalar>(from.value != zero, std::move(to_type));
 }
 
@@ -1132,8 +1137,13 @@ typename std::enable_if<std::is_base_of<TemporalType, To>::value &&
                         Result<std::shared_ptr<Scalar>>>::type
 CastImpl(const NumericScalar<From>& from, std::shared_ptr<DataType> to_type) {
   using ToScalar = typename TypeTraits<To>::ScalarType;
-  return std::make_shared<ToScalar>(static_cast<typename To::c_type>(from.value),
-                                    std::move(to_type));
+  if constexpr (std::is_same_v<From, HalfFloatType>) {
+    return std::make_shared<ToScalar>(typename To::c_type(from.value.ToFloat()),
+                                  std::move(to_type));
+  } else {
+    return std::make_shared<ToScalar>(typename To::c_type(from.value),
+                                      std::move(to_type));
+  }
 }
 
 // temporal to numeric

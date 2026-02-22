@@ -206,14 +206,22 @@ NullPartitionResult PartitionNullLikes(uint64_t* indices_begin, uint64_t* indice
     if (null_placement == NullPlacement::AtStart) {
       auto null_likes_end =
           partitioner(indices_begin, indices_end, [&values, &offset](uint64_t ind) {
-            return std::isnan(values.GetView(ind - offset));
+            if constexpr (std::is_same_v<typename ArrayType::TypeClass, HalfFloatType>) {
+              return values.GetView(ind - offset).is_nan();
+            } else {
+              return std::isnan(values.GetView(ind - offset));
+            }
           });
       return NullPartitionResult::NullsAtStart(indices_begin, indices_end,
                                                null_likes_end);
     } else {
       auto null_likes_begin =
           partitioner(indices_begin, indices_end, [&values, &offset](uint64_t ind) {
-            return !std::isnan(values.GetView(ind - offset));
+            if constexpr (std::is_same_v<typename ArrayType::TypeClass, HalfFloatType>) {
+              return !values.GetView(ind - offset).is_nan();
+            } else {
+              return !std::isnan(values.GetView(ind - offset));
+            }
           });
       return NullPartitionResult::NullsAtEnd(indices_begin, indices_end,
                                              null_likes_begin);

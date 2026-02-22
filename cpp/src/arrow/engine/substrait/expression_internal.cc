@@ -460,8 +460,8 @@ struct UserDefinedLiteralToArrow {
     if (ARROW_PREDICT_FALSE(!user_defined_->value().UnpackTo(&value))) {
       return FailedToUnpack("half_float", "UInt32Value");
     }
-    uint16_t half_float_value = value.value();
-    ARROW_ASSIGN_OR_RAISE(scalar_, MakeScalar(type.GetSharedPtr(), half_float_value));
+    auto half_float_value = static_cast<uint16_t>(value.value());
+    ARROW_ASSIGN_OR_RAISE(scalar_, MakeScalar(type.GetSharedPtr(), Float16::FromBits(half_float_value)));
     return Status::OK();
   }
   Status Visit(const LargeStringType& type) {
@@ -846,7 +846,7 @@ struct ScalarToProtoImpl {
   }
   Status Visit(const HalfFloatScalar& s) {
     google::protobuf::UInt32Value value;
-    value.set_value(s.value);
+    value.set_value(s.value.bits());
     return EncodeUserDefined(*s.type, value);
   }
   Status Visit(const FloatScalar& s) { return Primitive(&Lit::set_fp32, s); }

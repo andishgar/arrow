@@ -112,7 +112,7 @@ class ARROW_TESTING_EXPORT ConstantArrayGenerator {
   /// \param[in] value to repeat
   ///
   /// \return a generated Array
-  static std::shared_ptr<Array> Float16(int64_t size, uint16_t value = 0);
+  static std::shared_ptr<Array> Float16(int64_t size, util::Float16 value = util::Float16(0));
 
   /// \brief Generates a constant Float32Array
   ///
@@ -140,6 +140,7 @@ class ARROW_TESTING_EXPORT ConstantArrayGenerator {
 
   template <typename ArrowType, typename CType = typename ArrowType::c_type>
   static std::shared_ptr<Array> Numeric(int64_t size, CType value = 0) {
+
     switch (ArrowType::type_id) {
       case Type::BOOL:
         return Boolean(size, static_cast<bool>(value));
@@ -160,7 +161,7 @@ class ARROW_TESTING_EXPORT ConstantArrayGenerator {
       case Type::INT64:
         return Int64(size, static_cast<int64_t>(value));
       case Type::HALF_FLOAT:
-        return Float16(size, static_cast<uint16_t>(value));
+        return Float16(size, util::Float16(value));
       case Type::FLOAT:
         return Float32(size, static_cast<float>(value));
       case Type::DOUBLE:

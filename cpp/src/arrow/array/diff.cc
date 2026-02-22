@@ -604,20 +604,12 @@ class MakeFormatterImpl {
     return Status::OK();
   }
 
-  Status Visit(const HalfFloatType&) {
-    impl_ = [](const Array& array, int64_t index, std::ostream* os) {
-      const auto& float16_arr = checked_cast<const HalfFloatArray&>(array);
-      *os << arrow::util::Float16::FromBits(float16_arr.Value(index));
-    };
-    return Status::OK();
-  }
-
   // format Numerics with std::ostream defaults
   template <typename T>
   enable_if_number<T, Status> Visit(const T&) {
     impl_ = [](const Array& array, int64_t index, std::ostream* os) {
       const auto& numeric = checked_cast<const NumericArray<T>&>(array);
-      if (sizeof(decltype(numeric.Value(index))) == sizeof(char)) {
+      if constexpr (sizeof(decltype(numeric.Value(index))) == sizeof(char)) {
         // override std::ostream defaults for /(u|)int8_t/ since they are
         // formatted as potentially unprintable/tty borking characters
         *os << static_cast<int16_t>(numeric.Value(index));

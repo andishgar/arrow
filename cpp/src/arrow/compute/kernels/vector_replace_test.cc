@@ -412,8 +412,13 @@ TYPED_TEST(TestReplaceNumeric, ReplaceWithMaskRandom) {
   const int64_t length = 1023;
   std::vector<std::string> values = {"0.01", "0"};
   // Clamp the range because date/time types don't print well with extreme values
-  values.push_back(std::to_string(static_cast<CType>(std::min<double>(
-      16384.0, static_cast<double>(std::numeric_limits<CType>::max())))));
+  if constexpr (is_half_float_type<TypeParam>::value) {
+    values.push_back(std::to_string(util::Float16(std::min<double>(
+       16384.0, static_cast<double>(std::numeric_limits<CType>::max()))).ToFloat()));
+  } else {
+    values.push_back(std::to_string(static_cast<CType>(std::min<double>(
+        16384.0, static_cast<double>(std::numeric_limits<CType>::max())))));
+  }
   auto options = key_value_metadata({"null_probability", "min", "max"}, values);
   auto array =
       checked_pointer_cast<ArrayType>(rand.ArrayOf(*field("a", ty, options), length));

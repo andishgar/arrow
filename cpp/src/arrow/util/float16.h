@@ -24,7 +24,6 @@
 #include <limits>
 #include <type_traits>
 
-#include "arrow/util/endian.h"
 #include "arrow/util/macros.h"
 #include "arrow/util/ubsan.h"
 #include "arrow/util/visibility.h"
@@ -61,14 +60,10 @@ class ARROW_EXPORT Float16 {
   }
 
   /// \brief Read a `Float16` from memory in little-endian byte order
-  static Float16 FromLittleEndian(const uint8_t* src) {
-    return FromBits(::arrow::bit_util::FromLittleEndian(SafeLoadAs<uint16_t>(src)));
-  }
+  static Float16 FromLittleEndian(const uint8_t* src);
 
   /// \brief Read a `Float16` from memory in big-endian byte order
-  static Float16 FromBigEndian(const uint8_t* src) {
-    return FromBits(::arrow::bit_util::FromBigEndian(SafeLoadAs<uint16_t>(src)));
-  }
+  static Float16 FromBigEndian(const uint8_t* src);
 
   /// \brief Return the value's binary representation as a `uint16_t`
   constexpr uint16_t bits() const { return bits_; }
@@ -92,6 +87,12 @@ class ARROW_EXPORT Float16 {
 
   explicit operator float() const { return ToFloat(); }
   explicit operator double() const { return ToDouble(); }
+  template<typename T>
+  requires std::is_integral_v<T>
+  explicit operator T() {
+    return static_cast<T>(ToFloat());
+  }
+  explicit operator bool() const { return static_cast<bool>(ToFloat());}
 
   /// \brief Copy the value's bytes in native-endian byte order
   void ToBytes(uint8_t* dest) const { std::memcpy(dest, &bits_, sizeof(bits_)); }
@@ -203,4 +204,17 @@ class std::numeric_limits<arrow::util::Float16> {
   static constexpr T infinity() { return T::FromBits(0b0111110000000000); }
 
   static constexpr T quiet_NaN() { return T::FromBits(0b0111111111111111); }
+};
+
+template<>
+  struct std::hash<arrow::util::Float16>
+{
+
+  size_t
+  operator()(arrow::util::Float16 val) const noexcept
+  {
+    // 0 and -0 both hash to zero.
+    double tmp = val.ToDouble();
+    return tmp != 0.0 ? std::hash<double>{}(tmp) : 0;
+  }
 };

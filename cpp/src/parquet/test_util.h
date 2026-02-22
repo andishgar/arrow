@@ -151,7 +151,7 @@ void random_Int96_numbers(int n, uint32_t seed, int32_t min_value, int32_t max_v
                           Int96* out);
 
 void random_float16_numbers(int n, uint32_t seed, ::arrow::util::Float16 min_value,
-                            ::arrow::util::Float16 max_value, uint16_t* out);
+                            ::arrow::util::Float16 max_value,  ::arrow::util::Float16* out);
 
 void random_fixed_byte_array(int n, uint32_t seed, uint8_t* buf, int len, FLBA* out);
 

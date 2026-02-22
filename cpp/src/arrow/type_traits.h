@@ -307,7 +307,7 @@ struct TypeTraits<HalfFloatType> {
   using BuilderType = HalfFloatBuilder;
   using ScalarType = HalfFloatScalar;
   using TensorType = HalfFloatTensor;
-  using CType = uint16_t;
+  using CType = util::Float16;
 
   static constexpr int64_t bytes_required(int64_t elements) {
     return elements * static_cast<int64_t>(sizeof(uint16_t));
@@ -667,8 +667,7 @@ using is_floating_type = std::is_base_of<FloatingPointType, T>;
 template <typename T, typename R = void>
 using enable_if_floating_point = enable_if_t<is_floating_type<T>::value, R>;
 
-// Half floats are special in that they behave physically like an unsigned
-// integer.
+// Half floats are special in that they use util::Float as their C type.
 template <typename T>
 using is_half_float_type = std::is_same<HalfFloatType, T>;
 
@@ -972,8 +971,7 @@ using enable_if_physical_signed_integer =
 
 template <typename T>
 using is_physical_unsigned_integer_type =
-    std::integral_constant<bool, is_unsigned_integer_type<T>::value ||
-                                     is_half_float_type<T>::value>;
+    std::integral_constant<bool, is_unsigned_integer_type<T>::value>;
 
 template <typename T, typename R = void>
 using enable_if_physical_unsigned_integer =
@@ -991,8 +989,7 @@ using enable_if_physical_integer = enable_if_t<is_physical_integer_type<T>::valu
 // float-like c type.
 template <typename T>
 using is_physical_floating_type =
-    std::integral_constant<bool,
-                           is_floating_type<T>::value && !is_half_float_type<T>::value>;
+    std::integral_constant<bool, is_floating_type<T>::value>;
 
 template <typename T, typename R = void>
 using enable_if_physical_floating_point =
@@ -1075,11 +1072,7 @@ constexpr bool is_floating(Type::type type_id) {
 }
 
 /// \brief Check for a physical floating point type
-///
-/// This predicate matches floating-point types, except half-float.
-constexpr bool is_physical_floating(Type::type type_id) {
-  return is_floating(type_id) && type_id != Type::HALF_FLOAT;
-}
+constexpr bool is_physical_floating(Type::type type_id) { return is_floating(type_id); }
 
 /// \brief Check for a numeric type
 ///

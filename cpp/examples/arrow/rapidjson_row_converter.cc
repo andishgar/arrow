@@ -86,7 +86,14 @@ class RowBatchBuilder {
     for (int64_t i = 0; i < array.length(); ++i) {
       if (!array.IsNull(i)) {
         rapidjson::Value str_key(field_->name(), rows_[i].GetAllocator());
-        rows_[i].AddMember(str_key, array.Value(i), rows_[i].GetAllocator());
+        if constexpr (arrow::is_half_float_type<DataClass>::value) {
+          rows_[i].AddMember(str_key, array.Value(i).ToFloat(), rows_[i].GetAllocator());
+
+        }else {
+          rows_[i].AddMember(str_key, array.Value(i), rows_[i].GetAllocator());
+
+        }
+
       }
     }
     return arrow::Status::OK();

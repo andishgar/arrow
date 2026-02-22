@@ -17,7 +17,6 @@
 
 #pragma once
 
-#include <bit>
 #include <limits>
 #include "arrow/compute/api_scalar.h"
 #include "arrow/compute/kernels/common_internal.h"
@@ -595,7 +594,8 @@ struct PowerChecked {
     }
     // left to right O(logn) power with overflow checks
     bool overflow = false;
-    uint64_t bitmask = 1ULL << (63 - std::countl_zero(static_cast<uint64_t>(exp)));
+    uint64_t bitmask =
+        1ULL << (63 - bit_util::CountLeadingZeros(static_cast<uint64_t>(exp)));
     T pow = 1;
     while (bitmask) {
       overflow |= MultiplyWithOverflow(pow, pow, &pow);

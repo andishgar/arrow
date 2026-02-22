@@ -93,7 +93,7 @@ std::shared_ptr<arrow::Array> ConstantArrayGenerator::Int64(int64_t size, int64_
 }
 
 std::shared_ptr<arrow::Array> ConstantArrayGenerator::Float16(int64_t size,
-                                                              uint16_t value) {
+                                                              util::Float16 value) {
   return ConstantArray<HalfFloatType>(size, value);
 }
 

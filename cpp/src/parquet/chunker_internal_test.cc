@@ -124,7 +124,7 @@ Result<std::shared_ptr<Array>> GenerateArray(const std::shared_ptr<Field>& field
     GENERATE_CASE(UINT32, ::arrow::UInt32Builder, static_cast<uint32_t>(val))
     GENERATE_CASE(UINT64, ::arrow::UInt64Builder, static_cast<uint64_t>(val))
     GENERATE_CASE(HALF_FLOAT, ::arrow::HalfFloatBuilder,
-                  static_cast<uint16_t>(val % 1000))
+                  ::arrow::util::Float16(val % 1000))
     GENERATE_CASE(FLOAT, ::arrow::FloatBuilder, static_cast<float>(val % 1000) / 1000.0f)
     GENERATE_CASE(DOUBLE, ::arrow::DoubleBuilder,
                   static_cast<double>(val % 100000) / 1000.0)

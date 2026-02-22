@@ -105,7 +105,7 @@ class TestBaseArithmetic : public ::testing::Test {
   template <typename V>
   std::shared_ptr<Scalar> MakeScalar(V value) {
     if constexpr (std::is_same_v<T, HalfFloatType>) {
-      return std::make_shared<HalfFloatScalar>(Float16(value).bits());
+      return std::make_shared<HalfFloatScalar>(Float16(value));
     } else {
       return *arrow::MakeScalar(type_singleton(), value);
     }

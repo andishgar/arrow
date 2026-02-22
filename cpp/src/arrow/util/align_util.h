@@ -18,7 +18,6 @@
 #pragma once
 
 #include <algorithm>
-#include <bit>
 
 #include "arrow/memory_pool.h"
 #include "arrow/type_fwd.h"
@@ -44,7 +43,7 @@ struct BitmapWordAlignParams {
 template <uint64_t ALIGN_IN_BYTES>
 inline BitmapWordAlignParams BitmapWordAlign(const uint8_t* data, int64_t bit_offset,
                                              int64_t length) {
-  static_assert(std::has_single_bit(ALIGN_IN_BYTES),
+  static_assert(bit_util::IsPowerOf2(ALIGN_IN_BYTES),
                 "ALIGN_IN_BYTES should be a positive power of two");
   constexpr uint64_t ALIGN_IN_BITS = ALIGN_IN_BYTES * 8;
 

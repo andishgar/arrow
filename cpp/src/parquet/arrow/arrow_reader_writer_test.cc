@@ -4504,7 +4504,7 @@ TEST(TestArrowReaderAdHoc, ReadFloat16Files) {
     ASSERT_TRUE(chunk->IsNull(0));
     for (int32_t i = 0; i < tc.len - 1; ++i) {
       const auto expected = tc.vals[i];
-      const auto actual = Float16::FromBits(chunk->Value(i + 1));
+      const auto actual = chunk->Value(i + 1);
       if (expected.is_nan()) {
         // NaN representations aren't guaranteed to be exact on a binary level
         ASSERT_TRUE(actual.is_nan());

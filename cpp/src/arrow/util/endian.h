@@ -56,6 +56,7 @@
 #include <array>
 
 #include "arrow/util/type_traits.h"
+#include "arrow/util/float16.h"
 #include "arrow/util/ubsan.h"
 
 namespace arrow {
@@ -91,6 +92,12 @@ static inline float ByteSwap(float value) {
   const uint32_t swapped = ARROW_BYTE_SWAP32(util::SafeCopy<uint32_t>(value));
   return util::SafeCopy<float>(swapped);
 }
+
+static inline util::Float16 ByteSwap(util::Float16 value) {
+  const uint16_t swapped = ByteSwap(util::SafeCopy<uint16_t>(value));
+  return util::SafeCopy<util::Float16>(swapped);
+}
+
 
 // Write the swapped bytes into dst. Src and dst cannot overlap.
 static inline void ByteSwap(void* dst, const void* src, int len) {

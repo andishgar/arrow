@@ -2636,7 +2636,7 @@ struct SerializeFunctor<
 template <>
 struct SerializeFunctor<::parquet::FLBAType, ::arrow::HalfFloatType> {
   Status Serialize(const ::arrow::HalfFloatArray& array, ArrowWriteContext*, FLBA* out) {
-    const uint16_t* values = array.raw_values();
+    const uint16_t* values = reinterpret_cast<const uint16_t*>(array.raw_values());
     if (array.null_count() == 0) {
       for (int64_t i = 0; i < array.length(); ++i) {
         out[i] = ToFLBA(&values[i]);

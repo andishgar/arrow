@@ -736,7 +736,6 @@ def test_parquet_file_too_small(tempdir):
 @pytest.mark.fastparquet
 @pytest.mark.filterwarnings("ignore:RangeIndex:FutureWarning")
 @pytest.mark.filterwarnings("ignore:tostring:DeprecationWarning:fastparquet")
-@pytest.mark.filterwarnings("ignore:unclosed file:ResourceWarning")
 def test_fastparquet_cross_compatibility(tempdir):
     fp = pytest.importorskip('fastparquet')
 
@@ -760,19 +759,17 @@ def test_fastparquet_cross_compatibility(tempdir):
 
     fp_file = fp.ParquetFile(file_arrow)
     df_fp = fp_file.to_pandas()
-    # pandas 3 defaults to StringDtype for strings, fastparquet still returns object
-    # TODO: remove astype casts once fastparquet supports pandas 3 StringDtype
-    tm.assert_frame_equal(df_fp, df.astype({"a": object}))
+    tm.assert_frame_equal(df, df_fp)
 
     # Fastparquet -> arrow
     file_fastparquet = str(tempdir / "cross_compat_fastparquet.parquet")
-    # fastparquet doesn't support writing pandas 3 StringDtype yet
-    fp.write(file_fastparquet, df.astype({"a": object}))
+    fp.write(file_fastparquet, df)
 
     table_fp = pq.read_pandas(file_fastparquet)
     # for fastparquet written file, categoricals comes back as strings
     # (no arrow schema in parquet metadata)
-    tm.assert_frame_equal(table_fp.to_pandas(), df.astype({"f": object}))
+    df['f'] = df['f'].astype(object)
+    tm.assert_frame_equal(table_fp.to_pandas(), df)
 
 
 @pytest.mark.parametrize('array_factory', [

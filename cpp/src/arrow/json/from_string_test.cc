@@ -388,18 +388,21 @@ TEST(TestHalfFloatFromString, Basics) {
   std::shared_ptr<Array> expected, actual;
 
   AssertJSONArray<HalfFloatType>(type, "[]", {});
-  AssertJSONArray<HalfFloatType>(type, "[1, -1, 2.5, -2.5, 3e4, 3e-4]",
-                                 {15360, 48128, 16640, 49408, 30547, 3306});
-  AssertJSONArray<HalfFloatType>(type, "[0.0, -0.0, Inf, -Inf, null]",
-                                 {true, true, true, true, false},
-                                 {0, 32768, 31744, 64512, 0});
+  AssertJSONArray<HalfFloatType>(
+      type, "[1, -1, 2.5, -2.5, 3e4, 3e-4]",
+      {Float16::FromBits(15360), Float16::FromBits(48128), Float16::FromBits(16640),
+       Float16::FromBits(49408), Float16::FromBits(30547), Float16::FromBits(3306)});
+  AssertJSONArray<HalfFloatType>(
+      type, "[0.0, -0.0, Inf, -Inf, null]", {true, true, true, true, false},
+      {Float16::FromBits(0), Float16::FromBits(32768), Float16::FromBits(31744),
+       Float16::FromBits(64512), Float16::FromBits(0)});
 
   // Check NaN separately as AssertArraysEqual simply memcmp's array contents
   // and NaNs can have many bit representations.
   ASSERT_OK_AND_ASSIGN(actual, ArrayFromJSONString(type, "[NaN]"));
   ASSERT_OK(actual->ValidateFull());
-  uint16_t value = checked_cast<const HalfFloatArray&>(*actual).Value(0);
-  ASSERT_TRUE(Float16::FromBits(value).is_nan());
+  Float16 value = checked_cast<const HalfFloatArray&>(*actual).Value(0);
+  ASSERT_TRUE(value.is_nan());
 }
 
 TEST(TestHalfFloatFromString, Errors) {

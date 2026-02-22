@@ -134,14 +134,6 @@ struct GetViewType<Type, enable_if_has_c_type<Type>> {
   static T LogicalValue(PhysicalType value) { return value; }
 };
 
-template <>
-struct GetViewType<HalfFloatType> {
-  using T = Float16;
-  using PhysicalType = uint16_t;
-
-  static T LogicalValue(PhysicalType value) { return T::FromBits(value); }
-};
-
 template <typename Type>
 struct GetViewType<Type, enable_if_t<is_base_binary_type<Type>::value ||
                                      is_fixed_size_binary_type<Type>::value ||
@@ -206,11 +198,6 @@ struct GetOutputType;
 template <typename Type>
 struct GetOutputType<Type, enable_if_has_c_type<Type>> {
   using T = typename Type::c_type;
-};
-
-template <>
-struct GetOutputType<HalfFloatType> {
-  using T = Float16;
 };
 
 template <typename Type>
@@ -298,15 +285,6 @@ struct ArrayIterator;
 template <typename Type>
 struct ArrayIterator<Type, enable_if_c_number_or_decimal<Type>> {
   using T = typename TypeTraits<Type>::ScalarType::ValueType;
-  const T* values;
-
-  explicit ArrayIterator(const ArraySpan& arr) : values(arr.GetValues<T>(1)) {}
-  T operator()() { return *values++; }
-};
-
-template <>
-struct ArrayIterator<HalfFloatType> {
-  using T = Float16;
   const T* values;
 
   explicit ArrayIterator(const ArraySpan& arr) : values(arr.GetValues<T>(1)) {}
@@ -406,14 +384,6 @@ struct UnboxScalar<Type, enable_if_has_c_type<Type>> {
         checked_cast<const ::arrow::internal::PrimitiveScalarBase&>(val).view();
     ARROW_DCHECK_EQ(view.size(), sizeof(T));
     return *reinterpret_cast<const T*>(view.data());
-  }
-};
-
-template <>
-struct UnboxScalar<HalfFloatType> {
-  using T = Float16;
-  static T Unbox(const Scalar& val) {
-    return T(checked_cast<const HalfFloatScalar&>(val).value);
   }
 };
 

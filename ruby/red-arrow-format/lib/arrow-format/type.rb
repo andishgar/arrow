@@ -16,9 +16,6 @@
 
 module ArrowFormat
   class Type
-    def to_s
-      name
-    end
   end
 
   class NullType < Type
@@ -415,10 +412,6 @@ module ArrowFormat
       @unit = unit
     end
 
-    def to_s
-      "#{super}(#{unit})"
-    end
-
     def to_flatbuffers
       fb_type = FB::Time::Data.new
       fb_type.bit_width = @bit_width
@@ -482,12 +475,6 @@ module ArrowFormat
 
     def build_array(size, validity_buffer, values_buffer)
       TimestampArray.new(self, size, validity_buffer, values_buffer)
-    end
-
-    def to_s
-      options = [@unit]
-      options << @time_zone if @time_zone
-      "#{super}(#{options.join(", ")})"
     end
 
     def to_flatbuffers
@@ -592,10 +579,6 @@ module ArrowFormat
 
     def build_array(size, validity_buffer, values_buffer)
       DurationArray.new(self, size, validity_buffer, values_buffer)
-    end
-
-    def to_s
-      "#{super}(#{@unit})"
     end
 
     def to_flatbuffers
@@ -747,10 +730,6 @@ module ArrowFormat
       FixedSizeBinaryArray.new(self, size, validity_buffer, values_buffer)
     end
 
-    def to_s
-      "#{super}(#{@byte_width})"
-    end
-
     def to_flatbuffers
       fb_type = FB::FixedSizeBinary::Data.new
       fb_type.byte_width = @byte_width
@@ -765,10 +744,6 @@ module ArrowFormat
       super(byte_width)
       @precision = precision
       @scale = scale
-    end
-
-    def to_s
-      "#{name}(#{@precision}, #{@scale})"
     end
 
     def to_flatbuffers
@@ -813,10 +788,6 @@ module ArrowFormat
     def initialize(child)
       super()
       @child = child
-    end
-
-    def to_s
-      "#{super}<#{child.name}: #{child.type}>"
     end
   end
 
@@ -871,13 +842,6 @@ module ArrowFormat
       StructArray.new(self, size, validity_buffer, children)
     end
 
-    def to_s
-      fields = children.collect do |child|
-        "#{child.name}: #{child.type}"
-      end
-      "#{super}<#{fields.join(", ")}>"
-    end
-
     def to_flatbuffers
       FB::Struct::Data.new
     end
@@ -916,11 +880,6 @@ module ArrowFormat
       MapArray.new(self, size, validity_buffer, offsets_buffer, child)
     end
 
-    def to_s
-      key, value, = child.type.children
-      "#{name}<#{key.type}, #{value.type}>"
-    end
-
     def to_flatbuffers
       FB::Map::Data.new
     end
@@ -939,13 +898,6 @@ module ArrowFormat
 
     def resolve_type_index(type)
       @type_indexes[type] ||= @type_ids.index(type)
-    end
-
-    def to_s
-      children = @children.collect.with_index do |child, i|
-        "#{child.name}: #{child.type}=#{@type_ids[i]}"
-      end
-      "#{super}<#{children.join(", ")}>"
     end
 
     def to_flatbuffers
@@ -1022,11 +974,6 @@ module ArrowFormat
         FB::DictionaryKind::DENSE_ARRAY
       fb_field.type = @value_type.to_flatbuffers
       fb_field.dictionary = fb_dictionary_encoding
-    end
-
-    def to_s
-      "#{super}<index=#{@index_type}, value=#{@value_type}, " +
-        "ordered=#{@ordered}>"
     end
   end
 end

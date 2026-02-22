@@ -240,13 +240,22 @@ struct ConvertColumnsToTensorVisitor {
           out_values += in_values.size();
         } else {
           for (In in_value : in_values) {
-            *out_values++ = static_cast<Out>(in_value);
+            if constexpr (std::is_same_v<In, util::Float16>) {
+              *out_values++ = static_cast<Out>(in_value.ToFloat());
+            } else {
+              *out_values++ = static_cast<Out>(in_value);
+            }
           }
         }
       } else {
         for (int64_t i = 0; i < in_data.length; ++i) {
-          *out_values++ =
-              in_data.IsNull(i) ? static_cast<Out>(NAN) : static_cast<Out>(in_values[i]);
+          if constexpr (std::is_same_v<In, util::Float16>) {
+            *out_values++ = in_data.IsNull(i) ? static_cast<Out>(NAN)
+                                              : static_cast<Out>(in_values[i].ToFloat());
+          } else {
+            *out_values++ = in_data.IsNull(i) ? static_cast<Out>(NAN)
+                                              : static_cast<Out>(in_values[i]);
+          }
         }
       }
       return Status::OK();
@@ -270,12 +279,23 @@ struct ConvertColumnsToTensorRowMajorVisitor {
 
       if (in_data.null_count == 0) {
         for (int64_t i = 0; i < in_data.length; ++i) {
-          out_values[i * num_cols + col_idx] = static_cast<Out>(in_values[i]);
+          if constexpr (is_half_float_type<In>::value) {
+            out_values[i * num_cols + col_idx] = static_cast<Out>(in_values[i].ToFloat());
+          } else {
+            out_values[i * num_cols + col_idx] = static_cast<Out>(in_values[i]);
+          }
         }
       } else {
         for (int64_t i = 0; i < in_data.length; ++i) {
-          out_values[i * num_cols + col_idx] =
-              in_data.IsNull(i) ? static_cast<Out>(NAN) : static_cast<Out>(in_values[i]);
+          if constexpr (std::is_same_v<In, util::Float16>) {
+            out_values[i * num_cols + col_idx] =
+                in_data.IsNull(i) ? static_cast<Out>(NAN)
+                                  : static_cast<Out>(in_values[i].ToFloat());
+          } else {
+            out_values[i * num_cols + col_idx] = in_data.IsNull(i)
+                                                     ? static_cast<Out>(NAN)
+                                                     : static_cast<Out>(in_values[i]);
+          }
         }
       }
       return Status::OK();
@@ -377,8 +397,10 @@ Status RecordBatchToTensor(const RecordBatch& batch, bool null_to_nan, bool row_
       ConvertColumnsToTensor<UInt8Type>(batch, result->mutable_data(), row_major);
       break;
     case Type::UINT16:
-    case Type::HALF_FLOAT:
       ConvertColumnsToTensor<UInt16Type>(batch, result->mutable_data(), row_major);
+      break;
+    case Type::HALF_FLOAT:
+      ConvertColumnsToTensor<HalfFloatType>(batch, result->mutable_data(), row_major);
       break;
     case Type::UINT32:
       ConvertColumnsToTensor<UInt32Type>(batch, result->mutable_data(), row_major);
@@ -506,8 +528,13 @@ template <typename TYPE>
 int64_t ContiguousTensorCountNonZero(const Tensor& tensor) {
   using c_type = typename TYPE::c_type;
   auto* data = reinterpret_cast<const c_type*>(tensor.raw_data());
-  return std::count_if(data, data + tensor.size(),
-                       [](const c_type& x) { return x != 0; });
+  return std::count_if(data, data + tensor.size(), [](const c_type& x) {
+    if constexpr (std::is_same_v<c_type, util::Float16>) {
+      return x != util::Float16(0.0f);
+    } else {
+      return x != 0;
+    }
+  });
 }
 
 template <typename TYPE>

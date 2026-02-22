@@ -23,7 +23,6 @@
 #include <cstring>
 #include <memory>
 #include <string>
-#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -79,7 +78,7 @@ flatbuf::MetadataVersion MetadataVersionToFlatbuffer(MetadataVersion version);
 // Whether the type has a validity bitmap in the given IPC version
 bool HasValidityBitmap(Type::type type_id, MetadataVersion version);
 
-constexpr const std::string_view kArrowMagicBytes = "ARROW1";
+static constexpr const char* kArrowMagicBytes = "ARROW1";
 
 struct FieldMetadata {
   int64_t length;

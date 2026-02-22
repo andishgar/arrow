@@ -82,7 +82,7 @@ struct GeneratorFactory<Float16, DistributionType> {
 
   auto operator()(pcg32* rng) const {
     return [dist = DistributionType(min_, max_), rng]() mutable {
-      return Float16(dist(*rng)).bits();
+      return Float16(dist(*rng));
     };
   }
 
@@ -93,8 +93,6 @@ struct GeneratorFactory<Float16, DistributionType> {
 
 template <typename ValueType, typename DistributionType>
 struct GenerateOptions {
-  static constexpr bool kIsHalfFloat = std::is_same_v<ValueType, Float16>;
-  using PhysicalType = std::conditional_t<kIsHalfFloat, HalfFloatType::c_type, ValueType>;
   using FactoryType = GeneratorFactory<ValueType, DistributionType>;
 
   GenerateOptions(SeedType seed, ValueType min, ValueType max, double probability,
@@ -105,18 +103,18 @@ struct GenerateOptions {
         nan_probability_(nan_probability) {}
 
   void GenerateData(uint8_t* buffer, size_t n) {
-    GenerateTypedData(reinterpret_cast<PhysicalType*>(buffer), n);
+    GenerateTypedData(reinterpret_cast<ValueType*>(buffer), n);
   }
 
   template <typename V>
-  typename std::enable_if<!std::is_floating_point_v<V> && !kIsHalfFloat>::type
-  GenerateTypedData(V* data, size_t n) {
+  typename std::enable_if<!is_floating_type<typename CTypeTraits<V>::ArrowType>::value>::type GenerateTypedData(
+      V* data, size_t n) {
     GenerateTypedDataNoNan(data, n);
   }
 
   template <typename V>
-  typename std::enable_if<std::is_floating_point_v<V> || kIsHalfFloat>::type
-  GenerateTypedData(V* data, size_t n) {
+  typename std::enable_if<is_floating_type<typename CTypeTraits<V>::ArrowType>::value>::type GenerateTypedData(V* data,
+                                                                               size_t n) {
     if (nan_probability_ == 0.0) {
       GenerateTypedDataNoNan(data, n);
       return;
@@ -124,12 +122,12 @@ struct GenerateOptions {
     pcg32 rng(seed_++);
     auto gen = generator_factory_(&rng);
     ::arrow::random::bernoulli_distribution nan_dist(nan_probability_);
-    const PhysicalType nan_value = get_nan();
+    const ValueType nan_value = get_nan();
 
     std::generate(data, data + n, [&] { return nan_dist(rng) ? nan_value : gen(); });
   }
 
-  void GenerateTypedDataNoNan(PhysicalType* data, size_t n) {
+  void GenerateTypedDataNoNan(ValueType* data, size_t n) {
     pcg32 rng(seed_++);
     auto gen = generator_factory_(&rng);
 
@@ -152,12 +150,8 @@ struct GenerateOptions {
     if (null_count != nullptr) *null_count = count;
   }
 
-  static constexpr PhysicalType get_nan() {
-    if constexpr (kIsHalfFloat) {
-      return std::numeric_limits<ValueType>::quiet_NaN().bits();
-    } else {
-      return std::numeric_limits<ValueType>::quiet_NaN();
-    }
+  static constexpr ValueType get_nan() {
+    return std::numeric_limits<ValueType>::quiet_NaN();
   }
 
   FactoryType generator_factory_;
@@ -275,15 +269,6 @@ std::shared_ptr<Array> RandomArrayGenerator::Date64(int64_t size, int64_t min,
   OptionType options(seed(), min, max, null_probability);
   return GenerateNumericArray<Date64Type, OptionType>(size, options, alignment,
                                                       memory_pool);
-}
-
-std::shared_ptr<Array> RandomArrayGenerator::Float16(int64_t size, uint16_t min,
-                                                     uint16_t max,
-                                                     double null_probability,
-                                                     int64_t alignment,
-                                                     MemoryPool* memory_pool) {
-  return this->Float16(size, Float16::FromBits(min), Float16::FromBits(max),
-                       null_probability, /*nan_probability=*/0, alignment, memory_pool);
 }
 
 std::shared_ptr<Array> RandomArrayGenerator::Float16(
@@ -1144,22 +1129,9 @@ std::shared_ptr<Array> RandomArrayGenerator::ArrayOf(const Field& field, int64_t
       GENERATE_INTEGRAL_CASE(Int32Type);
       GENERATE_INTEGRAL_CASE(UInt64Type);
       GENERATE_INTEGRAL_CASE(Int64Type);
+      GENERATE_FLOATING_CASE(HalfFloatType, Float16);
       GENERATE_FLOATING_CASE(FloatType, Float32);
       GENERATE_FLOATING_CASE(DoubleType, Float64);
-
-    case Type::type::HALF_FLOAT: {
-      using ValueType = util::Float16;
-      const ValueType min_value = GetMetadata<ValueType>(
-          field.metadata().get(), "min", std::numeric_limits<ValueType>::min());
-      const ValueType max_value = GetMetadata<ValueType>(
-          field.metadata().get(), "max", std::numeric_limits<ValueType>::max());
-      const double nan_probability =
-          GetMetadata<double>(field.metadata().get(), "nan_probability", 0);
-      VALIDATE_MIN_MAX(min_value, max_value);
-      VALIDATE_RANGE(nan_probability, 0.0, 1.0);
-      return Float16(length, min_value, max_value, null_probability, nan_probability,
-                     alignment, memory_pool);
-    }
 
     case Type::type::STRING:
     case Type::type::BINARY: {
